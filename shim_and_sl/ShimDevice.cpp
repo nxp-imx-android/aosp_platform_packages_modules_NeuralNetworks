@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2021 The Android Open Source Project
+ * Copyright 2023 NXP.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -496,6 +497,8 @@ ndk::ScopedAStatus ShimDevice::getSupportedOperations(const Model& model,
     SLW2SAS_RETURN_IF_ERROR(result);
 
     std::copy(supportedOps.get(), supportedOps.get() + numOperations, supportedOperations->begin());
+    mfullySupports = std::all_of(supportedOperations->begin(), supportedOperations->end(),
+                                [](bool s) { return s; });
     return ndk::ScopedAStatus::ok();
 }
 
@@ -552,6 +555,11 @@ ndk::ScopedAStatus ShimDevice::prepareModelCommon(
     std::vector<uint8_t> copiedOperandValues;
     auto modelAndMemory =
             convertFromHAL(mNnapi.get(), model, &copiedOperandValues, &convertErrorStatus);
+
+    if (!mfullySupports) {
+        callback->notify(ErrorStatus::INVALID_ARGUMENT, nullptr);
+        return ndk::ScopedAStatus::ok();
+    }
 
     if (!modelAndMemory || modelAndMemory->models.empty()) {
         callback->notify(ErrorStatus::INVALID_ARGUMENT, nullptr);

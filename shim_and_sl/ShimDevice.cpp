@@ -497,8 +497,6 @@ ndk::ScopedAStatus ShimDevice::getSupportedOperations(const Model& model,
     SLW2SAS_RETURN_IF_ERROR(result);
 
     std::copy(supportedOps.get(), supportedOps.get() + numOperations, supportedOperations->begin());
-    mfullySupports = std::all_of(supportedOperations->begin(), supportedOperations->end(),
-                                [](bool s) { return s; });
     return ndk::ScopedAStatus::ok();
 }
 
@@ -556,7 +554,16 @@ ndk::ScopedAStatus ShimDevice::prepareModelCommon(
     auto modelAndMemory =
             convertFromHAL(mNnapi.get(), model, &copiedOperandValues, &convertErrorStatus);
 
-    if (!mfullySupports) {
+    const auto numOperations = model.main.operations.size();
+    auto annModel = modelAndMemory->models[0].getHandle();
+    auto supportedOps = std::make_unique<bool[]>(numOperations);
+    mNnapi->getFL5()->ANeuralNetworksModel_getSupportedOperationsForDevices(annModel,
+        &mDevice, /*numDevices=*/1, supportedOps.get());
+    std::vector<bool> support(numOperations);
+    std::copy(supportedOps.get(), supportedOps.get() + numOperations, support.begin());
+    bool SupportStatus = std::all_of(support.begin(), support.end(), [](bool s) { return s; });
+
+    if (!SupportStatus) {
         callback->notify(ErrorStatus::INVALID_ARGUMENT, nullptr);
         return ndk::ScopedAStatus::ok();
     }

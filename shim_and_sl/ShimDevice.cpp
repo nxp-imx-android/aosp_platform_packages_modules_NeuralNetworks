@@ -554,23 +554,19 @@ ndk::ScopedAStatus ShimDevice::prepareModelCommon(
     auto modelAndMemory =
             convertFromHAL(mNnapi.get(), model, &copiedOperandValues, &convertErrorStatus);
 
-    const auto numOperations = model.main.operations.size();
-    auto annModel = modelAndMemory->models[0].getHandle();
-    auto supportedOps = std::make_unique<bool[]>(numOperations);
-    mNnapi->getFL5()->ANeuralNetworksModel_getSupportedOperationsForDevices(annModel,
-        &mDevice, /*numDevices=*/1, supportedOps.get());
-    std::vector<bool> support(numOperations);
-    std::copy(supportedOps.get(), supportedOps.get() + numOperations, support.begin());
-    bool SupportStatus = std::all_of(support.begin(), support.end(), [](bool s) { return s; });
-
-    if (!SupportStatus) {
-        callback->notify(ErrorStatus::INVALID_ARGUMENT, nullptr);
-        return ndk::ScopedAStatus::ok();
-    }
-
     if (!modelAndMemory || modelAndMemory->models.empty()) {
         callback->notify(ErrorStatus::INVALID_ARGUMENT, nullptr);
         return toAStatus(convertErrorStatus);
+    }
+
+    std::vector<bool> supportedOps;
+    getSupportedOperations(model, &supportedOps);
+    bool allOpsSupported = std::all_of(supportedOps.cbegin(), supportedOps.cend(),
+                                       [](bool supported) { return supported; });
+
+    if (!allOpsSupported) {
+        callback->notify(ErrorStatus::INVALID_ARGUMENT, nullptr);
+        return ndk::ScopedAStatus::ok();
     }
 
     // b/185976051, past this point we pretend that compilation is asynchronous, and in

@@ -477,6 +477,12 @@ ndk::ScopedAStatus ShimDevice::getSupportedExtensions(std::vector<Extension>* ex
 
 ndk::ScopedAStatus ShimDevice::getSupportedOperations(const Model& model,
                                                       std::vector<bool>* supportedOperations) {
+    const auto canonicalModel = ::android::nn::convert(model);
+    if (!canonicalModel.has_value()) {
+        LOG(ERROR) << "HAL model is invalid: " << canonicalModel.error().message;
+        return toAStatus(ErrorStatus::INVALID_ARGUMENT, canonicalModel.error().message);
+    }
+
     const auto numOperations = model.main.operations.size();
     supportedOperations->resize(numOperations);
 
@@ -547,6 +553,13 @@ ndk::ScopedAStatus ShimDevice::prepareModelCommon(
     if (!ndkPriority) {
         callback->notify(ErrorStatus::INVALID_ARGUMENT, nullptr);
         return toAStatus(ErrorStatus::INVALID_ARGUMENT);
+    }
+
+    const auto canonicalModel = ::android::nn::convert(model);
+    if (!canonicalModel.has_value()) {
+        LOG(ERROR) << "HAL model is invalid: " << canonicalModel.error().message;
+        callback->notify(ErrorStatus::INVALID_ARGUMENT, nullptr);
+        return toAStatus(ErrorStatus::INVALID_ARGUMENT, canonicalModel.error().message);
     }
 
     ErrorStatus convertErrorStatus = ErrorStatus::NONE;
